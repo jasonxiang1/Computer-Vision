@@ -1,0 +1,160 @@
+import numpy as np
+import torch
+import torchvision
+import scipy.io
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import torchvision.transforms as transforms
+
+import matplotlib.pyplot as plt
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.fc1 = nn.Linear(1024,64)
+        self.fc2 = nn.Linear(64, 36)
+    def forward(self,x):
+        sigx = nn.Sigmoid()
+        softx = nn.Softmax()
+        x = self.fc1(x)
+        x = sigx(x)
+        x = self.fc2(x)
+        #x = softx(x)
+        return x
+
+
+
+#youtube video was used
+#https://www.youtube.com/watch?v=i2yPxY2rOzs
+
+#reference was used
+#https://github.com/pytorch/tutorials/blob/master/beginner_source/examples_nn/two_layer_net_nn.py
+
+#reference was used
+#https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
+
+#load NIST36 data
+train_data = scipy.io.loadmat('../data/nist36_train.mat')
+valid_data = scipy.io.loadmat('../data/nist36_valid.mat')
+test_data = scipy.io.loadmat('../data/nist36_test.mat')
+
+train_x_np, train_y_np = train_data['train_data'], train_data['train_labels']
+valid_x_np, valid_y_np = valid_data['valid_data'], valid_data['valid_labels']
+test_x_np, test_y_np = test_data['test_data'], test_data['test_labels']
+
+#convert data over from numpy to tensor
+#train
+train_x = torch.from_numpy(train_x_np).float()
+train_y = torch.from_numpy(train_y_np).float()
+#valid
+valid_x = torch.from_numpy(valid_x_np).float()
+valid_y = torch.from_numpy(valid_y_np).float()
+#valid
+test_x = torch.from_numpy(test_x_np).float()
+test_y = torch.from_numpy(test_y_np).float()
+
+#print out the network
+net = Net()
+
+optimizer = optim.SGD(net.parameters(),lr=0.7)
+
+optimizer.zero_grad()
+
+#train the network
+criterion = nn.CrossEntropyLoss()
+
+#get length of input data
+len_x = len(train_x[0])
+len_y = len(train_y[0])
+
+#concatenate x and y training sets
+train_cat = torch.cat((train_x,train_y),1)
+#concatenate x and y test sets
+test_cat = torch.cat((test_x,test_y),1)
+
+batch_size = 64
+
+trainloader = torch.utils.data.DataLoader(train_cat, batch_size=batch_size,shuffle=True)
+testloader = torch.utils.data.DataLoader(test_cat,batch_size=batch_size,shuffle=False)
+
+epoch_range = 50
+
+acc_iter = []
+loss_iter = []
+
+for epoch in range(epoch_range):
+    running_loss = 0.0
+    running_acc = 0.0
+    for i, data in enumerate(trainloader,0):
+        #splice data to get input and labels
+        inputs = data[:,:len_x]
+        labels = data[:,len_x:]
+
+        #input_2d = inputs.reshape(32,32)
+
+        optimizer.zero_grad()
+
+        outputs = net(inputs)
+        loss = criterion(outputs, labels.argmax(axis=1))
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+        #calculate accuracy between outputs and examples
+        acc_batch = torch.argmax(outputs,1)==torch.argmax(labels,1)
+        running_acc += torch.sum(acc_batch)
+    running_acc = (running_acc/10800)*100
+    print('[Epoch #: %d] loss: %.3f ; acc: %.3f'%
+          (epoch+1,running_loss,running_acc))
+    acc_iter = np.append(acc_iter,running_acc)
+    loss_iter = np.append(loss_iter,running_loss)
+
+plt.plot(np.arange(epoch_range)+1,acc_iter)
+plt.title('Running Accuracy vs Epoch [%]')
+plt.grid(True)
+plt.show()
+
+plt.plot(np.arange(epoch_range)+1,loss_iter)
+plt.title('Running Loss vs Epoch')
+plt.grid(True)
+plt.show()
+
+#
+# #declare variables
+# N, D_in, H, D_out = 64, 1024, 64, 36
+#
+# #create random tensors to hold inputs and outputs
+# x = torch.randn(N, D_in)
+# y = torch.randn(N, D_out)
+#
+# model = torch.nn.Sequential(
+#     torch.nn.Linear(D_in,H),
+#     torch.nn.Sigmoid(),
+#     torch.nn.Linear(H, D_out),
+#     torch.nn.Softmax()
+# )
+#
+# loss_fn = torch.nn.MSELoss(reduction='sum')
+#
+# learning_rate = 1e-4
+#
+# epochs = 1000
+#
+# for t in range(epochs):
+#     y_pred = model(train_x)
+#
+#     loss = loss_fn(y_pred,train_y)
+#
+#     if t%100==99:
+#         print(t,loss.item())
+#
+#     model.zero_grad()
+#
+#     loss.backward()
+#
+#     with torch.no_grad():
+#         for param in model.parameters():
+#             param -= learning_rate * param.grad
+
+print('done')
